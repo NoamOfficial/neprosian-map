@@ -1,79 +1,162 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <title>Neprosian Conquest Animation</title>
+  <meta charset="UTF-8" />
+  <title>Neprosian Empire Conquest Map - Fixed</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link
     rel="stylesheet"
     href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
   />
   <style>
+    body {
+      margin: 0;
+      background: #121212;
+      color: #fff;
+      font-family: 'Segoe UI', sans-serif;
+    }
     #map {
       height: 100vh;
+      width: 100vw;
+    }
+    .leaflet-popup-content-wrapper {
+      background-color: #1e1e1e;
+      color: #fff;
+    }
+    .leaflet-control-attribution {
+      display: none;
+    }
+    .btn-replay {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      z-index: 1000;
+      background: #ff4757;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      font-size: 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      box-shadow: 0 0 10px #ff6b81;
+    }
+    .btn-replay:hover {
+      background: #ff6b81;
+    }
+    .custom-label {
+      background: rgba(0,0,0,0.6);
+      color: #fff;
+      padding: 3px 6px;
+      border-radius: 4px;
+      font-size: 14px;
+      font-weight: 600;
+      pointer-events: none;
+      white-space: nowrap;
+      text-shadow: 0 0 2px black;
     }
   </style>
 </head>
 <body>
+  <button class="btn-replay" onclick="startAnimation()">Replay</button>
   <div id="map"></div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
-    const map = L.map('map').setView([45, 15], 4);
+    const map = L.map('map').setView([47, 15], 4);
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; OpenStreetMap contributors',
+    // English-friendly Humanitarian style tiles
+    L.tileLayer('https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors, Humanitarian Style'
     }).addTo(map);
 
+    let drawnPolygons = [];
+    let customLabels = [];
+
+    // Correct coords format: [lat, lng] for Leaflet polygons
     const phases = [
       {
         year: 1304,
         name: "Arabian Colonies",
-        coords: [[[45.0, 25.0], [45.5, 25.0], [45.5, 25.5], [45.0, 25.5], [45.0, 25.0]]]
+        coords: [[[45.0, 25.0], [45.5, 25.0], [45.5, 25.5], [45.0, 25.5], [45.0, 25.0]]],
+        labelPos: [45.25, 25.25]
       },
       {
         year: 1318,
         name: "Carsilium Colony (America)",
-        coords: [[[-82.0, 27.0], [-82.0, 28.5], [-80.0, 28.5], [-80.0, 27.0], [-82.0, 27.0]]]
+        coords: [[[27.0, -82.0], [28.5, -82.0], [28.5, -80.0], [27.0, -80.0], [27.0, -82.0]]],
+        labelPos: [27.75, -81.0]
       },
       {
         year: 1380,
         name: "Balkans & Central Europe",
-        coords: [[[13.0, 45.5], [13.0, 49.0], [22.0, 49.0], [22.0, 45.5], [13.0, 45.5]]]
+        coords: [[[45.5, 13.0], [49.0, 13.0], [49.0, 22.0], [45.5, 22.0], [45.5, 13.0]]],
+        labelPos: [47.0, 17.5]
       },
       {
         year: 1450,
-        name: "Baltics Expansion",
-        coords: [[[20.0, 56.0], [20.0, 59.0], [27.0, 59.0], [27.0, 56.0], [20.0, 56.0]]]
+        name: "Baltics",
+        coords: [[[56.0, 20.0], [59.0, 20.0], [59.0, 27.0], [56.0, 27.0], [56.0, 20.0]]],
+        labelPos: [57.5, 23.5]
       },
       {
         year: 1650,
-        name: "African Meme Outpost",
-        coords: [[[10.0000, 36.0000], [10.0001, 36.0000], [10.0001, 36.0001], [10.0000, 36.0001], [10.0000, 36.0000]]]
+        name: "African Outpost",
+        coords: [[[36.0, 10.0], [36.0, 10.0001], [36.0001, 10.0001], [36.0001, 10.0], [36.0, 10.0]]],
+        labelPos: [36.00005, 10.00005]
       }
     ];
 
-    let currentPhase = 0;
-
-    function drawNextPhase() {
-      if (currentPhase >= phases.length) return;
-
-      const phase = phases[currentPhase];
-      const polygon = L.polygon(phase.coords, {
-        color: '#ff5733',
-        fillColor: '#ffa07a',
-        fillOpacity: 0.5,
-        weight: 2
-      }).addTo(map);
-
-      polygon.bindPopup(`<b>${phase.year} CE</b><br>${phase.name}`).openPopup();
-
-      currentPhase++;
-      setTimeout(drawNextPhase, 1500); // next phase in 1.5s
+    function clearMap() {
+      drawnPolygons.forEach(p => map.removeLayer(p));
+      drawnPolygons = [];
+      customLabels.forEach(l => map.removeLayer(l));
+      customLabels = [];
     }
 
-    drawNextPhase(); // start the animation
+    function addCustomLabel(text, latlng) {
+      const label = L.marker(latlng, {
+        icon: L.divIcon({
+          className: 'custom-label',
+          html: text,
+          iconSize: [120, 24],
+          iconAnchor: [60, 12]
+        }),
+        interactive: false
+      }).addTo(map);
+      customLabels.push(label);
+    }
+
+    function startAnimation() {
+      clearMap();
+      let i = 0;
+
+      function drawPhase() {
+        if (i >= phases.length) return;
+
+        const phase = phases[i];
+        const polygon = L.polygon(phase.coords, {
+          color: '#ff6b81',
+          fillColor: '#ff849c',
+          fillOpacity: 0.5,
+          weight: 2
+        }).addTo(map);
+
+        drawnPolygons.push(polygon);
+        addCustomLabel(`${phase.name} (${phase.year} CE)`, phase.labelPos);
+
+        polygon.bindPopup(`<b>${phase.name}</b><br>Year: ${phase.year} CE`).openPopup();
+
+        i++;
+        setTimeout(drawPhase, 1800);
+      }
+
+      drawPhase();
+    }
+
+    // Start animation on page load
+    startAnimation();
   </script>
 </body>
 </html>
+
 
